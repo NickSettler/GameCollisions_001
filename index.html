@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <style>
+        canvas{
+            border: 1px solid #000;
+        }
+    </style>
+    <title>Document</title>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+<script>
+    const canvas = document.getElementById("canvas");
+    const context = canvas.getContext("2d");
+    canvas.width = canvas.height = 640;
+
+    let keys = [];
+
+    let player = {
+        // x: canvas.width / 2,
+        // y: canvas.height / 2,
+        x: 0,
+        y: 0,
+        w: 20, 
+        h: 20,
+        vx: 0,
+        vy: 0,
+        speed: 2,
+        grounded: false,
+    };
+
+    let walls = [
+        {
+            x: 100,
+            y: 100,
+            w: 100,
+            h: 20,
+        },
+        {
+            x: 100,
+            y: 620,
+            w: 100,
+            h: 20,
+        }
+    ]
+
+    let friction = 0.7;
+    let gravity = 0.7;
+
+    document.addEventListener("keydown", e=>{
+        keys[e.code] = true;
+    });
+
+    document.addEventListener("keyup", e=>{
+        keys[e.code] = false;
+    });
+
+    function update(){
+        if(keys["KeyA"]){
+            player.vx += -player.speed;
+        }
+        if(keys["KeyD"]){
+            player.vx += player.speed;
+        }
+        if(keys["KeyW"] || keys["Space"]){
+            if(player.grounded){
+                player.vy = -15; 
+                player.grounded = false;
+            }
+        }
+
+        player.vx *= friction;
+        player.vy += gravity;
+
+        player.x += player.vx;
+        // if(!player.grounded){
+            player.y += player.vy;
+        // }
+
+        if(player.x <= 0){
+            player.x = 0;
+        }
+        if(player.x + player.w >= canvas.width){
+            player.x = canvas.width - player.w;
+        }
+        if(player.y <= 0){
+            player.y = 0;
+        }
+        if(player.y + player.h >= canvas.height){
+            player.y = canvas.height - player.h;
+            player.grounded = true;
+        }
+
+        walls.forEach(wall => collides(player, wall));
+
+        // handleCollision(player, );
+    }
+
+    function collides(a, b){
+        if(a.x + a.w > b.x &&
+            a.x < b.x + b.w &&
+            a.y + a.h > b.y &&
+            a.y < b.y + b.h){
+            handleCollision(a, b);
+            return true;
+        }else{
+            return false;
+        }
+    }
+
+    function handleCollision(a, b){
+        let aMidX = a.x + a.w / 2;
+        let aMidY = a.y + a.h / 2;
+        let bMidX = b.x + b.w / 2;
+        let bMidY = b.y + b.h / 2;
+
+        let dx = (bMidX - aMidX) / (b.w / 2);
+        let dy = (bMidY - aMidY) / (b.h / 2);
+
+        let absDX = Math.abs(dx);
+        let absDY = Math.abs(dy);
+
+        if(Math.abs(absDX - absDY) < .1){
+            if(dx < 0){
+                a.x = b.x + b.w;
+            }else{
+                a.x = b.x - a.w;
+            }
+            if(dy < 0){
+                a.y = b.y + b.h;
+            }else{
+                a.y = b.y - a.h;
+            }
+        }else if(absDX > absDY){
+            if(dx < 0){
+                a.x = b.x + b.w;
+            }else{
+                a.x = b.x - a.w;
+            }
+        }else{
+            if(dy < 0){
+                a.y = b.y + b.h;
+            }else{
+                a.y = b.y - a.h;
+                a.vy = 0;
+                a.grounded = true;
+            }
+        }
+    }
+
+    function render(){
+        context.clearRect(0, 0, canvas.width, canvas.height);
+
+        context.beginPath();
+        context.fillStyle = "orange";
+        context.fillRect(player.x, player.y, player.w, player.h);
+
+        context.fillStyle = "blue";
+        walls.forEach(wall => context.fillRect(wall.x, wall.y, wall.w, wall.h));
+    }
+
+    function main(){
+        update();
+        render();
+
+        requestAnimationFrame(main);
+    }
+
+    main();
+</script>
+</body>
+</html>
