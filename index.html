@@ -24,28 +24,29 @@
     let player = {
         // x: canvas.width / 2,
         // y: canvas.height / 2,
-        x: 0,
-        y: 0,
+        x: 20,
+        y: 20,
         w: 20, 
         h: 20,
         vx: 0,
         vy: 0,
         speed: 2,
         grounded: false,
+        groundTime: 0,
     };
 
     let walls = [
         {
-            x: 100,
-            y: 100,
-            w: 100,
-            h: 20,
+            x: 60, y: 0, w: 20, h: 540
         },
         {
-            x: 100,
-            y: 620,
-            w: 100,
-            h: 20,
+            x: 60, y: 540, w: 100, h: 20
+        },
+        {
+            x: 60, y: 620, w: 160, h: 20,
+        },
+        {
+            x: 220, y: 540, w: 50, h: 20,
         }
     ]
 
@@ -61,17 +62,20 @@
     });
 
     function update(){
-        if(keys["KeyA"]){
+        if(keys["KeyA"] || keys["ArrowLeft"]){
             player.vx += -player.speed;
         }
-        if(keys["KeyD"]){
+        if(keys["KeyD"] || keys["ArrowRight"]){
             player.vx += player.speed;
         }
-        if(keys["KeyW"] || keys["Space"]){
+        if(keys["KeyW"] || keys["Space"] || keys["ArrowUp"]){
             if(player.grounded){
                 player.vy = -15; 
                 player.grounded = false;
             }
+        }
+        if(keys["KeyZ"]){
+            player.makeShield()
         }
 
         player.vx *= friction;
@@ -93,6 +97,9 @@
         }
         if(player.y + player.h >= canvas.height){
             player.y = canvas.height - player.h;
+            if(!player.grounded){
+                player.groundTime = Date.now();
+            }
             player.grounded = true;
         }
 
@@ -145,9 +152,13 @@
         }else{
             if(dy < 0){
                 a.y = b.y + b.h;
+                a.vy *= -0.01;
             }else{
                 a.y = b.y - a.h;
                 a.vy = 0;
+                if(!player.grounded){
+                    a.groundTime = Date.now();
+                }
                 a.grounded = true;
             }
         }
