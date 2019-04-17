@@ -5,19 +5,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <style>
-        canvas{
+        canvas {
             border: 1px solid #000;
         }
     </style>
     <title>Document</title>
 </head>
 <body>
-    <canvas id="canvas"></canvas>
+<canvas id="canvas"></canvas>
+
+<input type="number" id="deltaPixels" value="10">
+
+<button class="moveButtons" data-direction="up">Move Up</button>
+<button class="moveButtons" data-direction="left">Move Left</button>
+<button class="moveButtons" data-direction="right">Move Right</button>
+<button class="moveButtons" data-direction="down">Move Down</button>
 
 <script>
     const canvas = document.getElementById("canvas");
     const context = canvas.getContext("2d");
     canvas.width = canvas.height = 640;
+
+    const buttons = document.getElementsByClassName("moveButtons");
+    const deltaPixels = document.getElementById("deltaPixels");
+
+    function getSocket(){
+        return new Promise(resolve=>{
+            resolve(new WebSocket('ws://euphoria666.ru:3000'));
+        });
+    }
 
     let keys = [];
 
@@ -26,14 +42,28 @@
         // y: canvas.height / 2,
         x: 20,
         y: 20,
-        w: 20, 
+        w: 20,
         h: 20,
         vx: 0,
         vy: 0,
+        hp: 100,
+        lastHpChange: Date.now(),
+        mp: 100,
+        lastMpReg: Date.now(),
         speed: 2,
         grounded: false,
         groundTime: 0,
+        shield: false,
+        shieldR: 10,
+        lastShieldRChange: 0,
+        shieldTime: Date.now() - 3000,
+        cureTime: Date.now() - 5000,
     };
+
+    let selected = undefined;
+    let pixels = 10;
+
+    let started = false;
 
     let walls = [
         {
@@ -47,57 +77,144 @@
         },
         {
             x: 220, y: 540, w: 50, h: 20,
+        },
+        {
+            x: 270, y: 460, w: 20, h: 100,
+        },
+        {
+            x: 270, y: 440, w: 200, h: 20,
+        },
+        {
+            x: 140, y: 360, w: 20, h: 100
+        },
+        {
+            x: 60, y: 440, w: 100, h: 20
+        },
+        {
+            x: 220, y: 250, w: 200, h: 20
         }
-    ]
+    ];
+
+    let enemies = [
+        {
+            lx: 420, ly: 620,
+            x: 420, y: 620, w: 20, h: 20, step: 0,
+            path: [
+                {
+                    x: 50,
+                    time: 50,
+                },
+                {
+                    x: -50,
+                    time: 50,
+                }
+            ],
+
+        }
+    ];
 
     let friction = 0.7;
     let gravity = 0.7;
 
-    document.addEventListener("keydown", e=>{
+    document.addEventListener("keydown", e => {
         keys[e.code] = true;
     });
 
-    document.addEventListener("keyup", e=>{
+    document.addEventListener("keyup", e => {
         keys[e.code] = false;
     });
+    canvas.addEventListener("click", e => {
+        walls.forEach((wall, i) => {
+            if (e.layerX > wall.x &&
+                e.layerX < wall.x + wall.w &&
+                e.layerY > wall.y &&
+                e.layerY < wall.y + wall.h) {
+                selected = i;
+            }
+        });
+    });
 
-    function update(){
-        if(keys["KeyA"] || keys["ArrowLeft"]){
+    deltaPixels.addEventListener("input", () => {
+        pixels = deltaPixels.value * 1;
+    });
+
+    for (let button of buttons) {
+        let direction = button.dataset.direction;
+        button.addEventListener("click", e => {
+            if (selected !== undefined) {
+                switch (direction) {
+                    case "up":
+                        walls[selected].y -= pixels;
+                        break;
+                    case "left":
+                        walls[selected].x -= pixels;
+                        break;
+                    case "right":
+                        walls[selected].x += pixels;
+                        break;
+                    case "down":
+                        walls[selected].y += pixels;
+                        break;
+                }
+            }
+            console.log(walls[selected]);
+        });
+    }
+
+    function update() {
+        if (keys["KeyA"] || keys["ArrowLeft"]) {
             player.vx += -player.speed;
         }
-        if(keys["KeyD"] || keys["ArrowRight"]){
+        if (keys["KeyD"] || keys["ArrowRight"]) {
             player.vx += player.speed;
         }
-        if(keys["KeyW"] || keys["Space"] || keys["ArrowUp"]){
-            if(player.grounded){
-                player.vy = -15; 
+        if (keys["KeyW"] || keys["Space"] || keys["ArrowUp"]) {
+            if (player.grounded) {
+                player.vy = -15;
                 player.grounded = false;
             }
         }
-        if(keys["KeyZ"]){
-            player.makeShield()
+        if (keys["KeyS"] || keys["ControlLeft"]) {
+            // player.vy = 15;
+        }
+        if (keys["KeyZ"]) {
+            if (!player.shield && Date.now() - player.shieldTime > 3000 && player.mp > 20) {
+                player.shield = true;
+                player.shieldTime = Date.now();
+                player.mp -= 40;
+            }
+        }
+        if (keys["KeyX"]) {
+            if (player.mp > 30 && Date.now() - player.cureTime > 5000) {
+                if (player.hp + 15 >= 100) {
+                    player.hp = 100;
+                } else {
+                    player.hp += 15;
+                }
+                player.cureTime = Date.now();
+            }
         }
 
+
         player.vx *= friction;
+        // player.vy *= friction;
         player.vy += gravity;
 
         player.x += player.vx;
-        // if(!player.grounded){
-            player.y += player.vy;
-        // }
+        player.y += player.vy;
 
-        if(player.x <= 0){
+        if (player.x <= 0) {
             player.x = 0;
         }
-        if(player.x + player.w >= canvas.width){
+        if (player.x + player.w >= canvas.width) {
             player.x = canvas.width - player.w;
         }
-        if(player.y <= 0){
+        if (player.y <= 0) {
             player.y = 0;
         }
-        if(player.y + player.h >= canvas.height){
+        if (player.y + player.h >= canvas.height) {
             player.y = canvas.height - player.h;
-            if(!player.grounded){
+            if (!player.grounded) {
                 player.groundTime = Date.now();
             }
             player.grounded = true;
@@ -105,22 +222,69 @@
 
         walls.forEach(wall => collides(player, wall));
 
+
+        if (Date.now() - player.shieldTime > 3000 && player.shield) {
+            player.shieldR = 0;
+            player.shield = false;
+            player.shieldTime = Date.now();
+        }
+
+        if (Date.now() - player.cureTime > 5000) {
+
+        }
+
+        if (player.mp < 100) {
+            if (Date.now() - player.lastMpReg >= 1000) {
+                player.mp += 5;
+                player.lastMpReg = Date.now();
+            }
+        }
+
+
+        enemies.forEach(enemy => {
+            if (enemy.path) {
+                if (enemy.x - enemy.lx !== enemy.path[enemy.step].x) {
+                    enemy.x += enemy.path[enemy.step].x / enemy.path[enemy.step].time;
+                } else {
+                    enemy.lx = enemy.x;
+                    enemy.step++;
+                    if (enemy.step === enemy.path.length) {
+                        enemy.step = 0;
+                    }
+                }
+            }
+            let dx = Math.abs((player.x + player.w / 2) - (enemy.x + enemy.w / 2));
+            let dy = Math.abs((player.y + player.h / 2) - (enemy.y + enemy.h / 2));
+
+            let dist = Math.sqrt(Math.pow(dx, 2) + Math.pow(dy, 2));
+
+            if (dist <= 100) {
+                if (!player.shield) {
+                    if (Date.now() - player.lastHpChange > 500) {
+                        player.hp -= 5;
+                        player.lastHpChange = Date.now();
+                    }
+                }
+                // enemy.y = player.y;
+            }
+        });
+
         // handleCollision(player, );
     }
 
-    function collides(a, b){
-        if(a.x + a.w > b.x &&
+    function collides(a, b) {
+        if (a.x + a.w > b.x &&
             a.x < b.x + b.w &&
             a.y + a.h > b.y &&
-            a.y < b.y + b.h){
+            a.y < b.y + b.h) {
             handleCollision(a, b);
             return true;
-        }else{
+        } else {
             return false;
         }
     }
 
-    function handleCollision(a, b){
+    function handleCollision(a, b) {
         let aMidX = a.x + a.w / 2;
         let aMidY = a.y + a.h / 2;
         let bMidX = b.x + b.w / 2;
@@ -132,31 +296,38 @@
         let absDX = Math.abs(dx);
         let absDY = Math.abs(dy);
 
-        if(Math.abs(absDX - absDY) < .1){
-            if(dx < 0){
+        if (Math.abs(absDX - absDY) < .1) {
+            if (dx < 0) {
                 a.x = b.x + b.w;
-            }else{
+            } else {
                 a.x = b.x - a.w;
             }
-            if(dy < 0){
+            if (dy < 0) {
                 a.y = b.y + b.h;
-            }else{
+            } else {
+                player.grounded = true;
                 a.y = b.y - a.h;
             }
-        }else if(absDX > absDY){
-            if(dx < 0){
+        } else if (absDX > absDY) {
+            if (dx < 0) {
                 a.x = b.x + b.w;
-            }else{
+            } else {
                 a.x = b.x - a.w;
             }
-        }else{
-            if(dy < 0){
+        } else {
+            if (dy < 0) {
                 a.y = b.y + b.h;
                 a.vy *= -0.01;
-            }else{
+            } else {
                 a.y = b.y - a.h;
                 a.vy = 0;
-                if(!player.grounded){
+                if (a.x + a.w * 0.8 < b.x) {
+                    a.x = b.x - a.w;
+                }
+                if (a.x + a.w * 0.2 > b.x + b.w) {
+                    a.x = b.x + b.w;
+                }
+                if (!a.grounded) {
                     a.groundTime = Date.now();
                 }
                 a.grounded = true;
@@ -164,7 +335,7 @@
         }
     }
 
-    function render(){
+    function render() {
         context.clearRect(0, 0, canvas.width, canvas.height);
 
         context.beginPath();
@@ -172,10 +343,73 @@
         context.fillRect(player.x, player.y, player.w, player.h);
 
         context.fillStyle = "blue";
-        walls.forEach(wall => context.fillRect(wall.x, wall.y, wall.w, wall.h));
+        walls.forEach((wall, i) => {
+            context.fillRect(wall.x, wall.y, wall.w, wall.h)
+            if (selected === i) {
+                context.strokeStyle = "red";
+                context.lineWidth = 5;
+                context.strokeRect(wall.x, wall.y, wall.w, wall.h);
+            }
+        });
+
+        if (Date.now() - player.shieldTime > 3000) {
+            context.fillStyle = "green";
+        } else {
+            context.fillStyle = "red";
+        }
+
+
+        if (player.shield) {
+            let alpha = ((3000 - (Date.now() - player.shieldTime)) / 1500) / 3;
+            if (player.shieldR < 40 && Date.now() - player.lastShieldRChange > 2) {
+                player.shieldR += 4;
+                player.lastShieldAngChange = Date.now();
+            }
+            context.strokeStyle = `rgba(232, 155, 32, ${alpha + 0.2})`;
+            context.fillStyle = `rgba(244, 170, 66, ${alpha})`;
+            context.beginPath();
+            context.arc(player.x + player.w / 2, player.y + player.h / 2, player.shieldR, 0, Math.PI * 2);
+            context.stroke();
+            context.fill();
+            context.closePath();
+            context.fillStyle = "red";
+        }
+
+        context.font = "20px Arial";
+        context.fillText(`Shield (Z): ${Date.now() - player.shieldTime < 3000 && !player.shield ? (3 - (Date.now() - player.shieldTime) / 1000).toFixed(1) : 0}`, 500, 100, 140);
+
+        if (Date.now() - player.cureTime > 5000) {
+            context.fillStyle = "green";
+        } else {
+            context.fillStyle = "red";
+        }
+
+        context.fillText(`Cure (X): ${Date.now() - player.cureTime < 5000 ? (5 - (Date.now() - player.cureTime) / 1000).toFixed(1) : 0}`, 500, 140, 140);
+
+        context.fillStyle = "red";
+        context.strokeStyle = "darkred";
+        context.fillRect(500, 8, player.hp, 20);
+        context.strokeRect(500, 8, 100, 20);
+
+        context.fillStyle = "blue";
+        context.strokeStyle = "darkblue";
+        context.fillRect(500, 36, player.mp, 20);
+        context.strokeRect(500, 36, 100, 20);
+
+        context.fillStyle = "red";
+        enemies.forEach(enemy => {
+            context.fillRect(enemy.x, enemy.y, enemy.w, enemy.h);
+            context.fillStyle = "rgba(100, 78, 219, 0.3)";
+            context.strokeStyle = "rgba(100, 78, 219, 1)";
+            context.beginPath();
+            context.arc(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, 100, 0, Math.PI * 2);
+            context.fill();
+            context.stroke();
+            context.closePath();
+        });
     }
 
-    function main(){
+    function main() {
         update();
         render();
 
